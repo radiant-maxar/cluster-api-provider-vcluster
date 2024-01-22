@@ -22,20 +22,22 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	"github.com/loft-sh/vcluster/pkg/util/loghelper"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	infrastructurev1alpha1 "github.com/loft-sh/cluster-api-provider-vcluster/api/v1alpha1"
 	"github.com/loft-sh/cluster-api-provider-vcluster/controllers"
 	"github.com/loft-sh/cluster-api-provider-vcluster/pkg/helm"
 	"github.com/loft-sh/cluster-api-provider-vcluster/pkg/util/kubeconfighelper"
+	"github.com/loft-sh/vcluster/pkg/util/log"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -71,14 +73,23 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	cacheOpts := map[string]cache.Config{}
+	if namespace != "" {
+		cacheOpts[namespace] = cache.Config{}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Cache: cache.Options{
+			DefaultNamespaces: cacheOpts,
+		},
+		Metrics: metricsserver.Options{BindAddress: metricsAddr},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "4012c7fa.cluster.x-k8s.io",
-		Namespace:              namespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -95,7 +106,7 @@ func main() {
 		Client:      mgr.GetClient(),
 		HelmClient:  helm.NewClient(rawConfig),
 		HelmSecrets: helm.NewSecrets(mgr.GetClient()),
-		Log:         loghelper.New("vcluster-controller"),
+		Log:         log.NewLog(2).WithName("vcluster-controller"),
 		Scheme:      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VCluster")

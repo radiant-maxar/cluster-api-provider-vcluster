@@ -29,11 +29,16 @@ var (
 	MarkerLabel     = "vcluster.loft.sh/managed-by"
 	LabelPrefix     = "vcluster.loft.sh/label"
 	ControllerLabel = "vcluster.loft.sh/controlled-by"
-	// Suffix is the vcluster name, usually set at start time
-	Suffix = "suffix"
+
+	// VClusterName is the vcluster name, usually set at start time
+	VClusterName = "suffix"
 
 	ManagedAnnotationsAnnotation = "vcluster.loft.sh/managed-annotations"
 	ManagedLabelsAnnotation      = "vcluster.loft.sh/managed-labels"
+)
+
+const (
+	SkipBackSyncInMultiNamespaceMode = "vcluster.loft.sh/skip-backsync"
 )
 
 var Owner client.Object
@@ -254,7 +259,7 @@ func EnsureCRDFromPhysicalCluster(ctx context.Context, pConfig *rest.Config, vCo
 			version.Storage = true
 			newVersions = append(newVersions, version)
 
-			if version.Subresources.Status != nil {
+			if version.Subresources != nil && version.Subresources.Status != nil {
 				hasStatusSubresource = true
 			}
 			break
@@ -276,23 +281,20 @@ func EnsureCRDFromPhysicalCluster(ctx context.Context, pConfig *rest.Config, vCo
 
 	// wait for crd to become ready
 	log.NewWithoutName().Infof("Wait for crd %s to become ready in virtual cluster", groupVersionKind.String())
-	err = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: time.Second, Factor: 1.5, Cap: time.Minute, Steps: math.MaxInt32}, func() (bool, error) {
+	err = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{Duration: time.Second, Factor: 1.5, Cap: time.Minute, Steps: math.MaxInt32}, func(ctx context.Context) (bool, error) {
 		crdDefinition, err := vClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, groupVersionResource.GroupResource().String(), metav1.GetOptions{})
 		if err != nil {
 			return false, errors.Wrap(err, "retrieve crd in virtual cluster")
 		}
 		for _, cond := range crdDefinition.Status.Conditions {
-			switch cond.Type {
-			case apiextensionsv1.Established:
-				if cond.Status == apiextensionsv1.ConditionTrue {
-					return true, nil
-				}
+			if cond.Type == apiextensionsv1.Established && cond.Status == apiextensionsv1.ConditionTrue {
+				return true, nil
 			}
 		}
 		return false, nil
 	})
 	if err != nil {
-		return isClusterScoped, hasStatusSubresource, fmt.Errorf("failed to wait for CRD %s to become ready: %v", groupVersionKind.String(), err)
+		return isClusterScoped, hasStatusSubresource, fmt.Errorf("failed to wait for CRD %s to become ready: %w", groupVersionKind.String(), err)
 	}
 
 	// check if crd is cluster scoped
