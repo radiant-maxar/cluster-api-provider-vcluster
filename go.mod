@@ -1,6 +1,6 @@
 module github.com/loft-sh/cluster-api-provider-vcluster
 
-go 1.21.6
+go 1.22.0
 
 require (
 	github.com/loft-sh/utils v0.0.29
