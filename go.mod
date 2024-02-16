@@ -4,11 +4,11 @@ go 1.22.0
 
 require (
 	github.com/loft-sh/utils v0.0.29
-	k8s.io/apimachinery v0.29.1
-	k8s.io/apiserver v0.29.1
-	k8s.io/client-go v0.29.1
+	k8s.io/apimachinery v0.29.2
+	k8s.io/apiserver v0.29.2
+	k8s.io/client-go v0.29.2
 	sigs.k8s.io/cluster-api v1.6.1
-	sigs.k8s.io/controller-runtime v0.17.0
+	sigs.k8s.io/controller-runtime v0.17.2
 )
 
 require (
@@ -26,7 +26,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
-	k8s.io/cli-runtime v0.29.1 // indirect
+	k8s.io/cli-runtime v0.29.2 // indirect
 	sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.14.3-0.20230601165947-6ce0bf390ce3 // indirect
 )
@@ -53,7 +53,7 @@ require (
 	github.com/spf13/cobra v1.8.0 // indirect
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a // indirect
 	golang.org/x/sync v0.6.0 // indirect
-	k8s.io/kubectl v0.29.1 // indirect
+	k8s.io/kubectl v0.29.2 // indirect
 )
 
 require (
@@ -73,7 +73,7 @@ require (
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/loft-sh/vcluster v0.19.0-beta.2
+	github.com/loft-sh/vcluster v0.19.0
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1
@@ -96,9 +96,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.29.1
-	k8s.io/apiextensions-apiserver v0.29.1 // indirect
-	k8s.io/component-base v0.29.1 // indirect
+	k8s.io/api v0.29.2
+	k8s.io/apiextensions-apiserver v0.29.2 // indirect
+	k8s.io/component-base v0.29.2 // indirect
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-openapi v0.0.0-20240117194847-208609032b15 // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
