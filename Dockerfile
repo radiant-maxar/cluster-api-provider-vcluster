@@ -36,6 +36,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -o manager m
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
+LABEL org.opencontainers.image.source="https://github.com/radiant-maxar"
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY --from=builder /workspace/helm .
