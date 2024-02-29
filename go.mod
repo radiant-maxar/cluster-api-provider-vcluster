@@ -1,6 +1,6 @@
 module github.com/loft-sh/cluster-api-provider-vcluster
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/golangci/golangci-lint v1.56.2
@@ -236,7 +236,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/loft-sh/vcluster v0.19.1
+	github.com/loft-sh/vcluster v0.19.3
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1

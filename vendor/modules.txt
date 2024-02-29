@@ -477,8 +477,8 @@ github.com/loft-sh/log/logr/zapr
 ## explicit; go 1.20
 github.com/loft-sh/utils/pkg/helm
 github.com/loft-sh/utils/pkg/helm/values
-# github.com/loft-sh/vcluster v0.19.1
-## explicit; go 1.21.5
+# github.com/loft-sh/vcluster v0.19.3
+## explicit; go 1.22.0
 github.com/loft-sh/vcluster/pkg/log
 github.com/loft-sh/vcluster/pkg/util
 github.com/loft-sh/vcluster/pkg/util/applier
