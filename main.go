@@ -37,7 +37,7 @@ import (
 	"github.com/loft-sh/cluster-api-provider-vcluster/controllers"
 	"github.com/loft-sh/cluster-api-provider-vcluster/pkg/helm"
 	"github.com/loft-sh/cluster-api-provider-vcluster/pkg/util/kubeconfighelper"
-	"github.com/loft-sh/vcluster/pkg/util/log"
+	"github.com/loft-sh/log/logr"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -102,11 +102,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	log, err := logr.NewLoggerWithOptions(
+		logr.WithOptionsFromEnv(),
+		logr.WithComponentName("vcluster-controller"),
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to setup logger")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.VClusterReconciler{
 		Client:      mgr.GetClient(),
 		HelmClient:  helm.NewClient(rawConfig),
 		HelmSecrets: helm.NewSecrets(mgr.GetClient()),
-		Log:         log.NewLog(2).WithName("vcluster-controller"),
+		Log:         log,
 		Scheme:      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VCluster")
