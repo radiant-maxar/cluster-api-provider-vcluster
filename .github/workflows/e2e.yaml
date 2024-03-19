@@ -18,6 +18,7 @@ on:
     paths:
       - "**/*.go"
       - ".github/workflows/*.yaml"
+      - "go.*"
   pull_request:
 
 concurrency:
