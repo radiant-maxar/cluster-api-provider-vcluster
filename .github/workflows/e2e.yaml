@@ -14,6 +14,7 @@ on:
       - v*
     branches:
       - main
+      - v0.2.x
     paths:
       - "**/*.go"
   pull_request:
