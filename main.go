@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -73,23 +74,22 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	cacheOpts := map[string]cache.Config{}
-	if namespace != "" {
-		cacheOpts[namespace] = cache.Config{}
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := manager.New(ctrl.GetConfigOrDie(), manager.Options{
 		Scheme: scheme,
-		Cache: cache.Options{
-			DefaultNamespaces: cacheOpts,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
 		},
-		Metrics: metricsserver.Options{BindAddress: metricsAddr},
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 9443,
 		}),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "4012c7fa.cluster.x-k8s.io",
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				namespace: {},
+			},
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -112,11 +112,13 @@ func main() {
 	}
 
 	if err = (&controllers.VClusterReconciler{
-		Client:      mgr.GetClient(),
-		HelmClient:  helm.NewClient(rawConfig),
-		HelmSecrets: helm.NewSecrets(mgr.GetClient()),
-		Log:         log,
-		Scheme:      mgr.GetScheme(),
+		Client:             mgr.GetClient(),
+		HelmClient:         helm.NewClient(rawConfig),
+		HelmSecrets:        helm.NewSecrets(mgr.GetClient()),
+		Log:                log,
+		Scheme:             mgr.GetScheme(),
+		ClientConfigGetter: controllers.NewClientConfigGetter(),
+		HTTPClientGetter:   controllers.NewHTTPClientGetter(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VCluster")
 		os.Exit(1)
