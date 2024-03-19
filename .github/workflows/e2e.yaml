@@ -17,6 +17,7 @@ on:
       - v0.2.x
     paths:
       - "**/*.go"
+      - ".github/workflows/*.yaml"
   pull_request:
 
 concurrency:
