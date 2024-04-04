@@ -725,7 +725,7 @@ github.com/loft-sh/utils/pkg/downloader/commands
 github.com/loft-sh/utils/pkg/extract
 github.com/loft-sh/utils/pkg/helm
 github.com/loft-sh/utils/pkg/helm/values
-# github.com/loft-sh/vcluster v0.19.4
+# github.com/loft-sh/vcluster v0.19.5
 ## explicit; go 1.22.0
 github.com/loft-sh/vcluster/cmd/vclusterctl/cmd
 github.com/loft-sh/vcluster/cmd/vclusterctl/cmd/app/create
