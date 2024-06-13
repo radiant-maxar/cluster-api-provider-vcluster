@@ -1,3 +1,4 @@
+---
 name: Release
 
 on:
@@ -12,12 +13,12 @@ jobs:
       id-token: write
       contents: write
     steps:
-      - name: Check out code into the Go module directory
+      - name: Checkout Code
         uses: actions/checkout@v4
       - id: get_version
         run: |
           RELEASE_VERSION=$(echo $GITHUB_REF | sed -nE 's!refs/tags/!!p')
-          echo "::set-output name=release_version::$RELEASE_VERSION"
+          echo "::set-output name=release_version::${RELEASE_VERSION}"
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -25,28 +26,29 @@ jobs:
           cache: false
       - name: Prepare all release files for the provider
         run: |
-          make release TAG=$RELEASE_VERSION
+          make release TAG=${RELEASE_VERSION}
         env:
           RELEASE_VERSION: ${{ steps.get_version.outputs.release_version }}
       - name: Save release assets
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: release/
-      - name: Attach assets to release
-        uses: FabianKramm/release-asset-action@v1
-        with:
-          pattern: "release/*"
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attach release assets
+        env:
+          RELEASE_VERSION: ${{ steps.get_version.outputs.release_version }}
+        run: |
+          gh release upload ${RELEASE_VERSION} cluster-template.yaml infrastructure-components.yaml metadata.yaml --clobber
   publish-images:
     if: startsWith(github.ref, 'refs/tags/v') == true
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
       - id: get_version
         run: |
           RELEASE_VERSION=$(echo $GITHUB_REF | sed -nE 's!refs/tags/!!p')
-          echo "::set-output name=release_version::$RELEASE_VERSION"
+          echo "::set-output name=release_version::${RELEASE_VERSION}"
       - name: Get Docker Image Metadata
         id: docker_meta
         uses: docker/metadata-action@v5
