@@ -13,7 +13,6 @@ on:
     tags:
       - v*
     branches:
-      - main
       - v0.2.x
     paths:
       - "**/*.go"
@@ -44,7 +43,6 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-
     name: E2E Test
     steps:
 
@@ -81,7 +79,7 @@ jobs:
           # Install DevSpace
           curl -fsSL -o /tmp/devspace https://github.com/devspace-cloud/devspace/releases/latest/download/devspace-linux-amd64
           chmod +x /tmp/devspace
-          sudo mv /tmp/devspace /usr/local/bin/devspace          
+          sudo mv /tmp/devspace /usr/local/bin/devspace
 
       - name: Create and Start Kind Cluster
         run: |
@@ -178,3 +176,33 @@ jobs:
 
       - name: Run E2E Tests EKS
         run: NAMESPACE=vcluster-eks LOCAL_PORT=14553 go test -mod=vendor ./test/e2e -v
+  publish-latest-image:
+    name: Publish Latest Container Image
+    needs:
+      - e2e
+      - unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+      - name: Build and push latest cluster-api-provider-vcluster image
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64,linux/arm
+          push: true
+          tags: |
+            ghcr.io/radiant-maxar/cluster-api-provider-vcluster:latest
+      - name: Image digests
+        run: echo ${{ steps.docker_build.outputs.digest }}
