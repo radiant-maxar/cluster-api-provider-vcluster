@@ -187,7 +187,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Get Docker Image Metadata
-        id: meta
+        id: docker_meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/radiant-maxar/cluster-api-provider-vcluster
@@ -211,7 +211,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
       - name: Image digests
         run: echo ${{ steps.docker_build.outputs.digest }}
