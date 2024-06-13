@@ -15,11 +15,6 @@ on:
       - v*
     branches:
       - v0.2.x
-    paths:
-      - "**/*.go"
-      - ".github/workflows/*.yaml"
-      - "go.*"
-  pull_request:
 
 concurrency:
   group: e2e-${{ github.head_ref || github.ref_name }}
@@ -178,11 +173,8 @@ jobs:
       - name: Run E2E Tests EKS
         run: NAMESPACE=vcluster-eks LOCAL_PORT=14553 go test -mod=vendor ./test/e2e -v
 
-  publish-latest-image:
-    name: Publish Latest Container Image
-    needs:
-      - e2e
-      - unit-test
+  publish-image:
+    name: Publish Container Image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -194,6 +186,7 @@ jobs:
           images: ghcr.io/radiant-maxar/cluster-api-provider-vcluster
           tags: |
             type=sha
+            type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
