@@ -7,12 +7,9 @@ ARG HELM_VERSION=3.15.2
 
 WORKDIR /workspace
 
-# Install Delve for debugging
-RUN if [ "${TARGETARCH}" = "amd64" ]; then go install github.com/go-delve/delve/cmd/dlv@latest; fi
-
 # Install Helm 3
 COPY hack/get-helm-3 /usr/local/bin/get-helm-3
-RUN HELM_INSTALL_DIR=/workspace VERIFY_SIGNATURES=true PATH=$(pwd):${PATH} \
+RUN HELM_INSTALL_DIR=$(pwd) VERIFY_SIGNATURES=true PATH=$(pwd):${PATH} \
     /usr/local/bin/get-helm-3 --version ${HELM_VERSION}
 
 # Copy the Go Modules manifests
