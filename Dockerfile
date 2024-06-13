@@ -3,6 +3,7 @@ FROM golang:1.22 as builder
 
 ARG TARGETOS
 ARG TARGETARCH
+ARG HELM_VERSION=3.15.2
 
 WORKDIR /workspace
 
@@ -10,12 +11,9 @@ WORKDIR /workspace
 RUN if [ "${TARGETARCH}" = "amd64" ]; then go install github.com/go-delve/delve/cmd/dlv@latest; fi
 
 # Install Helm 3
-RUN curl -s https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz > helm3.tar.gz \
- && tar -zxvf helm3.tar.gz linux-amd64/helm \
- && chmod +x linux-amd64/helm \
- && mv linux-amd64/helm $PWD/helm \
- && rm helm3.tar.gz \
- && rm -R linux-amd64
+COPY hack/get-helm-3 /usr/local/bin/get-helm-3
+RUN HELM_INSTALL_DIR=/workspace VERIFY_SIGNATURES=true PATH=$(pwd):${PATH} \
+    /usr/local/bin/get-helm-3 --version ${HELM_VERSION}
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
