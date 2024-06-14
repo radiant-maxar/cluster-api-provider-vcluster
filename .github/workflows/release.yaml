@@ -8,32 +8,34 @@ on:
 jobs:
   publish-capi-yamls:
     if: startsWith(github.ref, 'refs/tags/v') == true
-    runs-on: ubuntu-22.04
-    permissions:
-      id-token: write
-      contents: write
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
       - id: get_version
         run: |
           RELEASE_VERSION=$(echo $GITHUB_REF | sed -nE 's!refs/tags/!!p')
           echo "::set-output name=release_version::${RELEASE_VERSION}"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
           cache: false
+
       - name: Prepare all release files for the provider
         run: |
           make release TAG=${RELEASE_VERSION}
         env:
           RELEASE_VERSION: ${{ steps.get_version.outputs.release_version }}
+
       - name: Save release assets
         uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: release/
+
       - name: Attach release assets
         env:
           GH_TOKEN: ${{ github.token }}
