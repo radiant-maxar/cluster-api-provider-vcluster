@@ -17,6 +17,7 @@ on:
       - v0.2.x
     paths:
       - "**/*.go"
+      - .github/workflows/e2e.yaml
 
 concurrency:
   group: e2e-${{ github.head_ref || github.ref_name }}
