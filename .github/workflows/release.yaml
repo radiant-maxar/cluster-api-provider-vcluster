@@ -39,6 +39,6 @@ jobs:
       - name: Attach release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.get_version.outputs.release_version }}
+          RELEASE_VERSION: v${{ steps.get_version.outputs.release_version }}
         run: |
           gh release upload ${RELEASE_VERSION} release/cluster-template.yaml release/infrastructure-components.yaml release/metadata.yaml --clobber
