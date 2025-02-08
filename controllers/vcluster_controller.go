@@ -26,15 +26,15 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/loft-sh/vcluster/pkg/util"
-	"github.com/loft-sh/vcluster/pkg/util/kubeconfig"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -56,8 +56,7 @@ type ClientConfigGetter interface {
 	NewForConfig(restConfig *rest.Config) (kubernetes.Interface, error)
 }
 
-type clientConfigGetter struct {
-}
+type clientConfigGetter struct{}
 
 func (c *clientConfigGetter) NewForConfig(restConfig *rest.Config) (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(restConfig)
@@ -71,8 +70,7 @@ type HTTPClientGetter interface {
 	ClientFor(r http.RoundTripper, timeout time.Duration) *http.Client
 }
 
-type httpClientGetter struct {
-}
+type httpClientGetter struct{}
 
 func (h *httpClientGetter) ClientFor(r http.RoundTripper, timeout time.Duration) *http.Client {
 	return &http.Client{
@@ -229,77 +227,100 @@ func (r *VClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_
 }
 
 func (r *VClusterReconciler) reconcilePhase(vCluster *v1alpha1.VCluster) {
-	if vCluster.Status.Phase != v1alpha1.VirtualClusterPending {
-		vCluster.Status.Phase = v1alpha1.VirtualClusterPending
-	}
+	logger := r.Log
+	oldPhase := vCluster.Status.Phase
 
-	if vCluster.Status.Ready && conditions.IsTrue(vCluster, v1alpha1.ControlPlaneInitializedCondition) {
-		vCluster.Status.Phase = v1alpha1.VirtualClusterDeployed
-	}
-
-	// set failed if a condition is errored
-	vCluster.Status.Reason = ""
-	vCluster.Status.Message = ""
-	for _, c := range vCluster.Status.Conditions {
-		if c.Status == corev1.ConditionFalse && c.Severity == v1alpha1.ConditionSeverityError {
+	// Check for failed state first
+	for _, condition := range vCluster.Status.Conditions {
+		if condition.Status == corev1.ConditionFalse && condition.Severity == v1alpha1.ConditionSeverityError {
 			vCluster.Status.Phase = v1alpha1.VirtualClusterFailed
-			vCluster.Status.Reason = c.Reason
-			vCluster.Status.Message = c.Message
+			vCluster.Status.Reason = condition.Reason
+			vCluster.Status.Message = condition.Message
 			break
 		}
+	}
+
+	// If not failed, check if deployed or pending
+	if vCluster.Status.Phase != v1alpha1.VirtualClusterFailed {
+		if vCluster.Status.Ready && conditions.IsTrue(vCluster, v1alpha1.ControlPlaneInitializedCondition) {
+			vCluster.Status.Phase = v1alpha1.VirtualClusterDeployed
+		} else {
+			vCluster.Status.Phase = v1alpha1.VirtualClusterPending
+		}
+	}
+
+	// Log phase transitions
+	if oldPhase != vCluster.Status.Phase {
+		logger.Info("vcluster phase changed",
+			"namespace", vCluster.Namespace,
+			"name", vCluster.Name,
+			"oldPhase", oldPhase,
+			"newPhase", vCluster.Status.Phase,
+			"reason", vCluster.Status.Reason,
+			"message", vCluster.Status.Message,
+		)
 	}
 }
 
 func (r *VClusterReconciler) redeployIfNeeded(_ context.Context, vCluster *v1alpha1.VCluster) error {
-	// upgrade chart
-	if vCluster.Generation == vCluster.Status.ObservedGeneration && conditions.IsTrue(vCluster, v1alpha1.HelmChartDeployedCondition) {
+	if vCluster.Generation == vCluster.Status.ObservedGeneration &&
+		conditions.IsTrue(vCluster, v1alpha1.HelmChartDeployedCondition) {
 		return nil
 	}
 
-	r.Log.V(1).Info("upgrade virtual cluster helm chart",
-		"namespace", vCluster.Namespace,
-		"clusterName", vCluster.Name,
-	)
+	logger := r.Log
 
-	var chartRepo string
-	if vCluster.Spec.HelmRelease != nil {
+	chartRepo := constants.DefaultVClusterRepo
+	if vCluster.Spec.HelmRelease != nil && vCluster.Spec.HelmRelease.Chart.Repo != "" {
 		chartRepo = vCluster.Spec.HelmRelease.Chart.Repo
 	}
-	if chartRepo == "" {
-		chartRepo = constants.DefaultVClusterRepo
-	}
 
-	// chart name
-	var chartName string
-	if vCluster.Spec.HelmRelease != nil {
+	chartName := constants.DefaultVClusterChartName
+	if vCluster.Spec.HelmRelease != nil && vCluster.Spec.HelmRelease.Chart.Name != "" {
 		chartName = vCluster.Spec.HelmRelease.Chart.Name
 	}
-	if chartName == "" {
-		chartName = constants.DefaultVClusterChartName
+
+	var chartVersion string
+	if vCluster.Spec.HelmRelease != nil && vCluster.Spec.HelmRelease.Chart.Version != "" {
+		chartVersion = vCluster.Spec.HelmRelease.Chart.Version
+		// Remove 'v' prefix if present
+		if len(chartVersion) > 0 && chartVersion[0] == 'v' {
+			chartVersion = chartVersion[1:]
+		}
 	}
 
-	if vCluster.Spec.HelmRelease == nil || vCluster.Spec.HelmRelease.Chart.Version == "" {
-		return fmt.Errorf("empty value of the .spec.HelmRelease.Version field")
-	}
-	// chart version
-	chartVersion := vCluster.Spec.HelmRelease.Chart.Version
-
-	if len(chartVersion) > 0 && chartVersion[0] == 'v' {
-		chartVersion = chartVersion[1:]
-	}
-
-	// determine values
 	var values string
-	if vCluster.Spec.HelmRelease != nil || vCluster.Spec.HelmRelease.Values == "" {
+	if vCluster.Spec.HelmRelease != nil && vCluster.Spec.HelmRelease.Values != "" {
 		values = vCluster.Spec.HelmRelease.Values
 	}
 
-	r.Log.Info("Deploy virtual cluster",
-		"namespace", vCluster.Namespace,
-		"clusterName", vCluster.Name,
-		"values", values,
-	)
-	chartPath := "./" + chartName + "-" + chartVersion + ".tgz"
+	if !conditions.IsTrue(vCluster, v1alpha1.HelmChartDeployedCondition) {
+		logger.Info("deploying vcluster",
+			"namespace", vCluster.Namespace,
+			"clusterName", vCluster.Name,
+			"chartRepo", chartRepo,
+			"chartName", chartName,
+			"chartVersion", chartVersion,
+			"values", values,
+		)
+	} else {
+		logger.V(1).Info("upgrading vcluster",
+			"namespace", vCluster.Namespace,
+			"clusterName", vCluster.Name,
+			"chartRepo", chartRepo,
+			"chartName", chartName,
+			"chartVersion", chartVersion,
+			"values", values,
+		)
+	}
+
+	var chartPath string
+	if chartVersion != "" {
+		chartPath = fmt.Sprintf("./%s-%s.tgz", chartName, chartVersion)
+	} else {
+		chartPath = fmt.Sprintf("./%s-latest.tgz", chartName)
+	}
+
 	_, err := os.Stat(chartPath)
 	if err != nil {
 		// we have to upgrade / install the chart
@@ -405,12 +426,20 @@ func (r *VClusterReconciler) syncVClusterKubeconfig(ctx context.Context, vCluste
 		return nil, err
 	}
 
-	kubeSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-kubeconfig", vCluster.Name), Namespace: vCluster.Namespace}}
+	kubeSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-kubeconfig", vCluster.Name),
+			Namespace: vCluster.Namespace,
+			Labels: map[string]string{
+				clusterv1beta1.ClusterNameLabel: vCluster.Name,
+			},
+		},
+		Type: clusterv1beta1.ClusterSecretType,
+		Data: map[string][]byte{
+			KubeconfigDataName: outKubeConfig,
+		},
+	}
 	_, err = controllerutil.CreateOrPatch(ctx, r.Client, kubeSecret, func() error {
-		if kubeSecret.Data == nil {
-			kubeSecret.Data = make(map[string][]byte)
-		}
-		kubeSecret.Data[KubeconfigDataName] = outKubeConfig
 		return nil
 	})
 	if err != nil {
@@ -484,13 +513,14 @@ func DiscoverHostFromService(ctx context.Context, client client.Client, vCluster
 	}
 
 	if host == "" {
-		host = fmt.Sprintf("%s.%s.svc", vCluster.Name, vCluster.Namespace)
+		host = fmt.Sprintf("%s.%s", vCluster.Name, vCluster.Namespace)
 	}
 	return host, nil
 }
 
 func GetVClusterKubeConfig(ctx context.Context, clusterClient client.Client, vCluster *v1alpha1.VCluster) (*api.Config, error) {
-	secretName := kubeconfig.DefaultSecretPrefix + vCluster.Name
+	// NOTE: The prefix must be kept in sync with https://github.com/loft-sh/vcluster/blob/main/pkg/util/kubeconfig/kubeconfig.go#L29
+	secretName := "vc-" + vCluster.Name
 
 	secret := &corev1.Secret{}
 	err := clusterClient.Get(ctx, types.NamespacedName{Namespace: vCluster.Namespace, Name: secretName}, secret)
@@ -498,7 +528,8 @@ func GetVClusterKubeConfig(ctx context.Context, clusterClient client.Client, vCl
 		return nil, err
 	}
 
-	kcBytes, ok := secret.Data[kubeconfig.KubeconfigSecretKey]
+	// NOTE: The Data map key must be kept in sync with https://github.com/loft-sh/vcluster/blob/main/pkg/util/kubeconfig/kubeconfig.go#L30
+	kcBytes, ok := secret.Data["config"]
 	if !ok {
 		return nil, fmt.Errorf("couldn't find kube config in vcluster secret")
 	}
@@ -617,7 +648,7 @@ func EnsureFinalizer(ctx context.Context, client client.Client, obj client.Objec
 // SetupWithManager sets up the controller with the Manager.
 func (r *VClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	var err error
-	r.clusterKindExists, err = util.KindExists(mgr.GetConfig(), clusterv1beta1.GroupVersion.WithKind("Cluster"))
+	r.clusterKindExists, err = kindExists(mgr.GetConfig(), clusterv1beta1.GroupVersion.WithKind("Cluster"))
 	if err != nil {
 		return err
 	}
@@ -625,4 +656,28 @@ func (r *VClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.VCluster{}).
 		Complete(r)
+}
+
+func kindExists(config *rest.Config, groupVersionKind schema.GroupVersionKind) (bool, error) {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return false, err
+	}
+
+	resources, err := discoveryClient.ServerResourcesForGroupVersion(groupVersionKind.GroupVersion().String())
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	for _, r := range resources.APIResources {
+		if r.Kind == groupVersionKind.Kind {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

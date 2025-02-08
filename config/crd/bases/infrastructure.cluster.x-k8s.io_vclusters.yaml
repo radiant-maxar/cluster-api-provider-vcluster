@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: vclusters.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -14,7 +14,23 @@ spec:
     singular: vcluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.helmRelease.chart.version
+      name: Version
+      type: string
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: VCluster is the Schema for the vclusters API
@@ -121,11 +137,13 @@ spec:
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object
                 type: array
               initialized:
+                default: false
                 description: Initialized defines if the virtual cluster control plane
                   was initialized.
                 type: boolean
@@ -142,8 +160,14 @@ spec:
               phase:
                 description: Phase describes the current phase the virtual cluster
                   is in
+                enum:
+                - ""
+                - Pending
+                - Deployed
+                - Failed
                 type: string
               ready:
+                default: false
                 description: Ready defines if the virtual cluster control plane is
                   ready.
                 type: boolean
